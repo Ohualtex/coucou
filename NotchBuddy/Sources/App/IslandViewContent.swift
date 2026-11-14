@@ -278,11 +278,15 @@ struct OverviewView: View {
         guard let task else { return }
         switch task.pill {
         case "integration_claude":
-            if ClaudeHost.activate(task.hostApp) { return }
+            if ClaudeHost.activate(task.hostApp, tty: task.sessionTty, cwd: task.sessionCwd, itermSessionId: task.sessionItermId) { return }
             // openApplication also brings a running VS Code forward; activate() is ignored on macOS 14+.
             let vscode = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.microsoft.VSCode")
                 ?? URL(fileURLWithPath: "/Applications/Visual Studio Code.app")
-            NSWorkspace.shared.openApplication(at: vscode, configuration: .init(), completionHandler: nil)
+            if let cwd = task.sessionCwd, !cwd.isEmpty, FileManager.default.fileExists(atPath: cwd) {
+                NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: vscode, configuration: .init(), completionHandler: nil)
+            } else {
+                NSWorkspace.shared.openApplication(at: vscode, configuration: .init(), completionHandler: nil)
+            }
         case "integration_resend":
             NSWorkspace.shared.open(URL(string: "https://resend.com/emails")!)
         case "integration_mail":
@@ -366,7 +370,9 @@ struct OverviewView: View {
                 }
             } else {
                 #if !APPSTORE
-                TerminalTarget.activate(sessionBundleId: task.sessionBundleId)
+                TerminalTarget.activate(sessionBundleId: task.sessionBundleId,
+                                        tty: task.sessionTty, cwd: task.sessionCwd,
+                                        itermSessionId: task.sessionItermId)
                 #endif
             }
         }
@@ -800,8 +806,10 @@ struct ErrorView: View {
 /// The app a session runs in (its terminal, or VS Code), else any known terminal.
 /// Only brings apps to the front, so the App Store build has it too.
 private func openSessionApp(_ task: AgentTask?) {
-    if !(task?.pill == "integration_claude" && ClaudeHost.activate(task?.hostApp)),
-       !TerminalTarget.activate(sessionBundleId: task?.sessionBundleId) {
+    if !(task?.pill == "integration_claude" && ClaudeHost.activate(task?.hostApp, tty: task?.sessionTty, cwd: task?.sessionCwd, itermSessionId: task?.sessionItermId)),
+       !TerminalTarget.activate(sessionBundleId: task?.sessionBundleId ?? task?.hostApp,
+                                tty: task?.sessionTty, cwd: task?.sessionCwd,
+                                itermSessionId: task?.sessionItermId) {
         NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Utilities/Terminal.app"))
     }
 }
@@ -2421,7 +2429,9 @@ struct IntegrationCardView: View {
 
                 HStack(spacing: 8) {
                     if task.pill == "integration_claude", task.hostApp != nil {
-                        Button("Open \(ClaudeHost.name(for: task.hostApp))") { ClaudeHost.activate(task.hostApp) }
+                        Button("Open \(ClaudeHost.name(for: task.hostApp))") {
+                            ClaudeHost.activate(task.hostApp, tty: task.sessionTty, cwd: task.sessionCwd, itermSessionId: task.sessionItermId)
+                        }
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color(hex: task.color).opacity(0.7))
                             .buttonStyle(.plain)
@@ -2432,11 +2442,10 @@ struct IntegrationCardView: View {
                             .buttonStyle(.plain)
                     } else if task.pill == "agent_cursor" {
                         #if !APPSTORE
-                        if let url = NSWorkspace.shared.urlForApplication(
-                            withBundleIdentifier: "com.todesktop.230313mzl4w4u92") {
+                        if NSWorkspace.shared.urlForApplication(
+                            withBundleIdentifier: "com.todesktop.230313mzl4w4u92") != nil {
                             Button("Open Cursor") {
-                                NSWorkspace.shared.openApplication(at: url, configuration: .init(),
-                                                                   completionHandler: nil)
+                                ClaudeHost.focusBundle("com.todesktop.230313mzl4w4u92", cwd: task.sessionCwd)
                             }
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color(hex: task.color).opacity(0.85))
