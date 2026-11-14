@@ -58,8 +58,9 @@ class PairingVerifierTest {
     @Test fun appModelVerifiesBeforeReplacingExistingPairing() {
         val modelSrc = File("src/main/kotlin/com/coucou/android/app/AppModel.kt").readText()
         val pairFn = modelSrc.substringAfter("fun pair(text: String): Boolean {").substringBefore("private fun connect(")
-        val pairedBranch = pairFn.substringAfter("if (!isPaired)")
+        val pairedBranch = pairFn.substringAfter("val gen = ++verifyGeneration")
         assertTrue(pairedBranch.contains("PairingVerifier.verify("))
+        assertTrue(pairedBranch.contains("stopLink()"))
         assertTrue(pairedBranch.indexOf("PairingVerifier.verify(") < pairedBranch.indexOf("stopLink()"))
         assertTrue(pairedBranch.indexOf("PairingVerifier.verify(") < pairedBranch.indexOf("store.savePairing(p)"))
         assertTrue(pairedBranch.contains("msg_pair_verify_failed"))
